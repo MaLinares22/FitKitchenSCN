@@ -36,6 +36,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
+    //Declaracion de Todas las Herramientas
     private lateinit var binding: ActivityMainBinding
     private lateinit var cameraProvider: ProcessCameraProvider
     private var imageCapture: ImageCapture? = null
@@ -49,22 +50,27 @@ class MainActivity : AppCompatActivity() {
     private val detectedIngredients = linkedSetOf<String>()
     private var detector: ObjectDetectorHelper? = null
 
+    //Solicitur de permiso para acceder a la camara del celular.
     private val requestCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) startCamera() else toast("Se necesita permiso de cámara para el modo en vivo")
     }
 
+    //Abridor de el explorador de archivos para que el usuario seleccione una foto y cargarla
     private val galleryPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) handleGalleryUri(uri)
     }
 
+    //Creacion de la actividad
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        //En lugar de usar findviewbyid se usa binding para un codigo mas seguro, menos NullPointer Exeptions
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.recipesRecycler.layoutManager = LinearLayoutManager(this)
         binding.recipesRecycler.adapter = adapter
         setupUi()
+        //Hilo secundario para cargar las recetas sin bloquear la interfaz
         lifecycleScope.launch {
             runCatching { repository.cargarDatos() }
                 .onFailure { toast("No se pudieron cargar las recetas: ${it.message}") }
@@ -75,22 +81,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUi() {
+        //Setear las pestañas de modo principales
         binding.modeTabs.addTab(binding.modeTabs.newTab().setText("Modo En Vivo"))
         binding.modeTabs.addTab(binding.modeTabs.newTab().setText("Tomar Foto"))
         binding.modeTabs.addTab(binding.modeTabs.newTab().setText("Galería"))
+        //Detectar cuando el usuario cambia de modo
         binding.modeTabs.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab) {
+                //Actualizar la variable del modo de acuerdo a la pestaña seleccionada
                 mode = Mode.entries[tab.position]
+                //Limpiar los recuadros verdes de la anterior pantalla
                 binding.graphicOverlay.clear()
                 if (mode == Mode.LIVE) {
                     isShowingStaticImage = false
                 }
+                //Cambia el icono si esta en galeria o en camara
                 binding.actionButton.setImageResource(
                     if (mode == Mode.GALLERY) android.R.drawable.ic_menu_gallery
                     else android.R.drawable.ic_menu_camera
                 )
+                //Cambiar entre las vistas visibles de acuerdo al modo
                 binding.previewView.visibility = if (mode == Mode.LIVE) View.VISIBLE else View.GONE
                 binding.frozenImage.visibility = if (mode == Mode.LIVE) View.GONE else View.VISIBLE
+                //Destruir el anterior Stream Mode para crear uno nuevo, reiniciando el motor de MLKIT
                 if (mode == Mode.LIVE) {
                     binding.frozenImage.visibility = View.GONE
                     detector?.close()
@@ -101,13 +114,17 @@ class MainActivity : AppCompatActivity() {
             override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab) = Unit
             override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab) = Unit
         })
+        //Detectar cuando el usuario toca el boton de captura
         binding.actionButton.setOnClickListener {
             if (mode == Mode.GALLERY) {
+                //Si el usuario esta en modo galeria, abrir el explorador de archivos
                 galleryPicker.launch(arrayOf("image/*", "video/*"))
             } else {
                 if (mode == Mode.LIVE) {
+                    //Si esta en modo live y toma foto cambiarlo a galeria
                     binding.modeTabs.getTabAt(Mode.PHOTO.ordinal)?.select()
                 } else {
+                    //Limpiar la pantalla antes de una foto nueva
                     isShowingStaticImage = false
                     binding.frozenImage.visibility = View.GONE
                     binding.graphicOverlay.clear()
@@ -115,6 +132,7 @@ class MainActivity : AppCompatActivity() {
                 capturePhoto()
             }
         }
+
         binding.clearButton.setOnClickListener {
             detectedIngredients.clear()
             refreshBasket()
